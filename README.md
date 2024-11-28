@@ -6,26 +6,26 @@ mongodb+srv://YggDrasil:YggDrasil@cluster0.idfko.mongodb.net/Pi_Poll?retryWrites
 project-root/
 ├── backend/                           // Backend logic for the application
 │   ├── controllers/                   // Route handlers and business logic
-│   │   ├── authController.js          // Handles Pi SDK auth logic
-│   │   ├── pollController.js          // Handles poll creation, voting, results
-│   │   └── notificationController.js  // Handles user notifications
+│   │   ├── authController.py          // Handles Pi SDK auth logic
+│   │   ├── pollController.py          // Handles poll creation, voting, results
+│   │   └── notificationController.py  // Handles user notifications
 │   ├── models/                        // Mongoose schemas for MongoDB
-│   │   ├── User.js                    // User schema (includes Pi SDK user ID)
-│   │   ├── Poll.js                    // Poll schema
-│   │   └── Notification.js            // Notification schema
+│   │   ├── User.py                    // User schema (includes Pi SDK user ID)
+│   │   ├── Poll.py                    // Poll schema
+│   │   └── Notification.py            // Notification schema
 │   ├── routes/                        // API routes
-│   │   ├── authRoutes.js              // Auth-related routes
-│   │   ├── pollRoutes.js              // Poll-related routes
-│   │   └── notificationRoutes.js      // Notification-related routes
+│   │   ├── authRoutes.py              // Auth-related routes
+│   │   ├── pollRoutes.py              // Poll-related routes
+│   │   └── notificationRoutes.py      // Notification-related routes
 │   ├── middleware/                    // Express middleware
-│   │   └── authMiddleware.js          // Middleware for route protection
+│   │   └── authMiddleware.py          // Middleware for route protection
 │   ├── utils/                         // Utility functions for backend
-│   │   └── db.js                      // MongoDB connection logic
+│   │   └── db.py                      // MongoDB connection logic
 │   ├── config/                        // Configuration files
-│   │   ├── dbConfig.js                // MongoDB connection strings
-│   │   └── env.js                     // Environment variable management
-│   ├── app.js                         // Express app initialization
-│   └── server.js                      // Backend server entry point
+│   │   ├── dbConfig.py                // MongoDB connection strings
+│   │   └── env.py                     // Environment variable management
+│   ├── app.py                         // Express app initialization
+│   └── server.py                      // Backend server entry point
 ├── frontend/                          // React app (detailed below)
 │   ├── src/
 │   │   ├── components/                // Reusable components and pages

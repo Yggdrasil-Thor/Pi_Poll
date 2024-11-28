@@ -1,4 +1,20 @@
-.env
-__pycache__
+# .gitignore
+
+# Virtual environment
+pi_poll_app_venv/
+
+# Node modules
+frontend/node_modules/
+
+# Python bytecode
 *.pyc
+
+# IDE/editor files
+.idea/
+.vscode/
+
+# Environment variables
+.env
+
+# Log files
 *.log

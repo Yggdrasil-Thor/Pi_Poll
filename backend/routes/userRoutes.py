@@ -6,6 +6,7 @@ from controllers.userController import (
     handle_get_profile,
     handle_update_profile,
     handle_logout,
+    handle_get_user_polls,
     validate_pi_token
 )
 
@@ -63,6 +64,19 @@ def logout():
         return handle_logout(request)
     except Exception as e:
         return create_response(False, message="Failed to logout", status_code=500)
+    
+
+@user_routes.route('/<string:user_id>/polls', methods=['GET'])
+@session_required  # Protect the route with session middleware
+@rate_limit
+def get_user_polls(user_id):
+    """Fetch all polls created by a specific user."""
+    try:
+        return handle_get_user_polls(user_id)  # Call the controller function
+    except Exception as e:
+        return create_response(False, message="Failed to fetch user's polls", status_code=500)
+
+
 
 @user_routes.route('/validate-token', methods=['POST'])
 @rate_limit

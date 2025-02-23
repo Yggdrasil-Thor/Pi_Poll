@@ -1,99 +1,129 @@
-# backend/routes/pollRoutes.py
-
-'''from flask import Blueprint
-from backend.controllers.pollController import create_poll, vote_on_poll, get_poll_results
-
-poll_blueprint = Blueprint('poll', __name__)
-
-# Create Poll Route
-poll_blueprint.route('/poll', methods=['POST'])(create_poll)
-
-# Vote on Poll Route
-poll_blueprint.route('/poll/<int:poll_id>/vote', methods=['POST'])(vote_on_poll)
-
-# Get Poll Results Route
-poll_blueprint.route('/poll/<int:poll_id>/results', methods=['GET'])(get_poll_results)
-'''
-
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request, jsonify
 from middleware.authMiddleware import session_required
 from middleware.rateLimiterMiddleware import rate_limit
-from controllers.pollController import (
-    handle_create_poll,
-    handle_get_poll,
-    handle_update_poll,
-    handle_delete_poll
-)
+from controllers.pollController import PollController
 
-# Define the Blueprint for user-related routes
-user_routes = Blueprint("poll_routes", __name__)
+poll_controller = PollController()  # Instantiate the class
+
+# Define the Blueprint for poll-related routes
+poll_routes = Blueprint('poll_routes', __name__)
+
+# Use the instance methods
+handle_create_poll = poll_controller.handle_create_poll
+handle_update_poll = poll_controller.handle_update_poll
+handle_add_vote = poll_controller.handle_add_vote
+handle_get_poll = poll_controller.handle_get_poll
+handle_get_user_polls = poll_controller.handle_get_user_polls
+handle_delete_poll = poll_controller.handle_delete_poll
+handle_get_active_polls = poll_controller.handle_get_active_polls
+handle_get_polls_by_topic = poll_controller.handle_get_polls_by_topic
+handle_extend_poll_votes = poll_controller.handle_extend_poll_votes
+
 
 def create_response(success, data=None, message=None, status_code=200):
     """Utility to create a consistent response format."""
     response = {"success": success, "data": data, "message": message}
     return jsonify(response), status_code
 
-@user_routes.route('/login', methods=['POST'])
-@rate_limit
-def login():
-    """Handles user login."""
-    try:
-        #print("Cookies in userRoutes login",request.cookies)
-        return handle_login(request)
-    except ValueError as e:  # Example for validation-related errors
-        return create_response(False, message=str(e), status_code=400)
-    except Exception as e:
-        return create_response(False, message="An unexpected error occurred", status_code=500)
 
-@user_routes.route('/profile', methods=['GET'])
+# Create Poll Route
+@poll_routes.route('/create', methods=['POST'])
 @session_required  # Protect the route with session middleware
 @rate_limit
-def get_profile():
-    """Fetches the user's profile information."""
+def create_poll():
     try:
-        #print("Cookies in userRoutes get_profile",request.cookies)
-        return handle_get_profile(request)
+        return handle_create_poll(request)
     except Exception as e:
-        return create_response(False, message="Failed to fetch profile", status_code=500)
+        print(f"Error creating poll: {str(e)}")  # Print error in logs
+        return create_response(False, message=f"Failed to create poll: {str(e)}", status_code=500)
 
-@user_routes.route('/profile', methods=['PUT'])
-@session_required  # Protect the route with session middleware
+
+
+# Update Poll Route
+@poll_routes.route('/update/<string:poll_id>', methods=['PUT'])
+@session_required
 @rate_limit
-def update_profile():
-    """Updates the user's profile information."""
+def update_poll(poll_id):
     try:
-        # Validate the request payload
-        if not request.json:
-            return create_response(False, message="Invalid payload", status_code=400)
-        return handle_update_profile(request)
+        return handle_update_poll(request, poll_id)
     except Exception as e:
-        return create_response(False, message="Failed to update profile", status_code=500)
+        return create_response(False, message="Failed to update poll", status_code=500)
 
-@user_routes.route('/logout', methods=['POST'])
-@session_required  # Protect the route with session middleware
+
+# Add Vote to Poll Route
+@poll_routes.route('/vote/<string:poll_id>', methods=['POST'])
+@session_required
 @rate_limit
-def logout():
-    """Logs the user out by clearing their session."""
-    #rate_limit()  # Apply rate limiting
+def add_vote(poll_id):
     try:
-        return handle_logout(request)
+        return handle_add_vote(request, poll_id)
     except Exception as e:
-        return create_response(False, message="Failed to logout", status_code=500)
+        return create_response(False, message="Failed to add vote", status_code=500)
 
-@user_routes.route('/validate-token', methods=['POST'])
+
+# Get Poll by ID Route
+@poll_routes.route('/<string:poll_id>', methods=['GET'])
+@session_required
 @rate_limit
-def validate_token():
-    """Validates the Pi token."""
-    #rate_limit()  # Apply rate limiting
+def get_poll(poll_id):
     try:
-        pi_token = request.json.get("pi_token")
-        if not pi_token:
-            return create_response(False, message="Token is missing", status_code=400)
-
-        pi_user_id, username = validate_pi_token(pi_token)
-        if not pi_user_id:
-            return create_response(False, message="Invalid or expired token", status_code=401)
-
-        return create_response(True, data={"user_id": pi_user_id, "username": username})
+        return handle_get_poll(request, poll_id)
     except Exception as e:
-        return create_response(False, message="Failed to validate token", status_code=500)
+        return create_response(False, message="Failed to fetch poll", status_code=500)
+
+
+# Get User's Polls Route
+@poll_routes.route('/user/<int:user_id>', methods=['GET'])
+@session_required
+@rate_limit
+def get_user_polls(user_id):
+    try:
+        return handle_get_user_polls(request, user_id)
+    except Exception as e:
+        return create_response(False, message="Failed to fetch user's polls", status_code=500)
+
+
+# Delete Poll Route
+@poll_routes.route('/delete/<string:poll_id>', methods=['DELETE'])
+@session_required
+@rate_limit
+def delete_poll(poll_id):
+    try:
+        return handle_delete_poll(request, poll_id)
+    except Exception as e:
+        return create_response(False, message="Failed to delete poll", status_code=500)
+    
+
+@poll_routes.route('/extendVotes/<string:poll_id>', methods=['POST'])
+@session_required
+@rate_limit
+def extend_poll_votes(poll_id):
+    try:
+        print(f"🔹 Received request to extend votes for poll ID: {poll_id}")  # Debugging print
+        return handle_extend_poll_votes(request, poll_id)
+    except Exception as e:
+        print(f"🔴 Error in extend_poll_votes route: {e}")  # Debugging print
+        return create_response(False, message="Failed to extend poll votes", status_code=500)
+
+
+
+# Get Active Polls Route
+@poll_routes.route('/active', methods=['GET'])
+@session_required
+@rate_limit
+def get_active_polls():
+    try:
+        return handle_get_active_polls(request)
+    except Exception as e:
+        return create_response(False, message="Failed to fetch active polls", status_code=500)
+
+
+# Get Polls by Topic Route
+@poll_routes.route('/topic/<string:topic>', methods=['GET'])
+@session_required
+@rate_limit
+def get_polls_by_topic(topic):
+    try:
+        return handle_get_polls_by_topic(request, topic)
+    except Exception as e:
+        return create_response(False, message="Failed to fetch polls for topic", status_code=500)

@@ -170,7 +170,7 @@ def session_required(f):
     def decorated_function(*args, **kwargs):
         # Retrieve the session_id from cookies
         session_id = request.cookies.get('session_id')
-        print('Session Id in session required decorator:', session_id)
+        #print('Session Id in session required decorator:', session_id)
 
         # If there's no session_id or session is invalid
         if not session_id or not is_session_valid(session_id):

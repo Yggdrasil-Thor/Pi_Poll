@@ -1,8 +1,8 @@
-# ------------------------------- Poll Model (poll_model.py) -------------------------------
 from pydantic import BaseModel
 from bson import ObjectId
 from datetime import datetime
-from pymongo import PyMongoError
+from pymongo.errors import PyMongoError
+from datetime import datetime, timezone
 
 # Importing db_instance class from db.py
 from utils.db import db_instance
@@ -15,55 +15,217 @@ def generate_objectid():
         print(f"Error generating ObjectId: {e}")
         raise
 
-
 class Poll:
     def __init__(self):
         self.collection = db_instance.get_collection("polls")
 
-    def create_poll(self, title, description, options, created_by, visibility="public", expires_at=None):
-        """Create a new poll with provided details."""
+    def create_poll(self, title, description, options, created_by, topics, visibility="public", expires_at=None, required_votes=2,
+                    requires_payment_for_creation=False, payment_amount_for_creation=0, 
+                    requires_payment_for_update=False, payment_amount_for_update=0, 
+                    requires_payment_for_voting=False, payment_amount_for_voting=0,session=None):
+        """Create a new poll with provided details, including topics and payment flags."""
         try:
+            if requires_payment_for_creation and payment_amount_for_creation <= 0:
+                raise ValueError("Payment is required for poll creation, but no valid amount provided.")
+
             poll = {
                 "title": title,
                 "description": description,
-                "options": [{"optionId": generate_objectid(), "optionText": opt, "voteCount": 0} for opt in options],
-                "createdBy": ObjectId(created_by),
-                "createdAt": datetime.utcnow(),
+                "topics": topics if isinstance(topics, list) else [],  # Ensure topics is a list
+                "options": [{"optionId": i, "optionText": opt, "voteCount": 0} for i, opt in enumerate(options)],
+                "createdBy": str(created_by),
+                "createdAt": datetime.now(timezone.utc),
                 "expiresAt": expires_at,
                 "visibility": visibility,
                 "totalVotes": 0,
-                "linkedPayments": [],  # Reference to associated payments
-                "isActive": True
-
+                "requiredVotes": required_votes,
+                "currentVotes": 0,
+                "isActive": True,
+                "requires_payment_for_creation": requires_payment_for_creation,
+                "payment_amount_for_creation": payment_amount_for_creation,
+                "requires_payment_for_update": requires_payment_for_update,
+                "payment_amount_for_update": payment_amount_for_update,
+                "requires_payment_for_voting": requires_payment_for_voting,
+                "payment_amount_for_voting": payment_amount_for_voting,
             }
-            return self.collection.insert_one(poll)
+
+            result = self.collection.insert_one(poll,session=session)
+            return result.inserted_id
         except PyMongoError as e:
             print(f"Error creating poll: {e}")
             raise
-
-    def get_poll_by_id(self, poll_id):
-        """Fetch a poll by its ObjectId."""
-        try:
-            return self.collection.find_one({"_id": ObjectId(poll_id)})
-        except PyMongoError as e:
-            print(f"Error fetching poll by ID: {e}")
+        except ValueError as ve:
+            print(f"Validation Error: {ve}")
             raise
 
-    def get_polls_by_user(self, user_id):
-        """Fetch all polls created by a specific user."""
+    def update_poll(self, poll_id, updates, requires_payment_for_update=False, payment_amount_for_update=0,session=None):
+        """Update poll details like title, description, and visibility, with optional payment logic."""
         try:
-            return self.collection.find({"createdBy": ObjectId(user_id)})
-        except PyMongoError as e:
-            print(f"Error fetching polls by user: {e}")
-            raise
+            # Convert only if poll_id is a string
+            #print(f"poll_id type in model 1: {type(poll_id)} | value: {poll_id}")
+            if not isinstance(poll_id, ObjectId):
+                poll_id = ObjectId(poll_id)
+            #print(f"poll_id type in model 2: {type(poll_id)} | value: {poll_id}")
+            poll = self.collection.find_one({"_id": poll_id})
+            if not poll:
+                raise ValueError("Poll not found.")
+            
+            if requires_payment_for_update:
+                updates["requires_payment_for_update"] = requires_payment_for_update
+                updates["payment_amount_for_update"] = payment_amount_for_update
 
-    def update_poll_vote(self, poll_id, option_id):
-        """Increment the vote count for a specific option in a poll."""
-        try:
             return self.collection.update_one(
-                {"_id": ObjectId(poll_id), "options.optionId": ObjectId(option_id)},
-                {"$inc": {"options.$.voteCount": 1, "totalVotes": 1}}
-            )
+                {"_id": ObjectId(poll_id)},
+                {"$set": updates}
+            ,session=session)
         except PyMongoError as e:
-            print(f"Error updating poll vote: {e}")
+            print(f"Error updating poll details: {e}")
             raise
+
+    def add_vote(self, poll_id, option_id, user_id):
+        """Add a vote to a poll, checking if payment is required."""
+        try:
+            poll = self.collection.find_one({"_id": ObjectId(poll_id)})
+            if not poll:
+                raise ValueError("Poll not found.")
+            
+            # Check if the poll has expired
+            expires_at = poll.get("expiresAt")
+            if expires_at:
+                expires_at = datetime.fromisoformat(expires_at)
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > expires_at:
+                    raise ValueError("The poll has expired.")
+
+            if poll.get("requires_payment_for_voting"):
+                # Payment logic for voting here (we can later extend it with payment check)
+                pass  # Placeholder for payment functionality
+
+            # If no payment is required, continue with voting process.
+            result = self.collection.update_one(
+                {"_id": ObjectId(poll_id), "options.optionId": option_id},
+                {"$inc": {"options.$.voteCount": 1, "totalVotes": 1, "currentVotes": 1}}
+            )
+            if result.modified_count == 0:
+                raise ValueError("Poll or Option not found.")
+
+            if poll["currentVotes"] >= poll["requiredVotes"]:
+                self.collection.update_one(
+                    {"_id": ObjectId(poll_id)},
+                    {"$set": {"isActive": False}}
+                )
+        except PyMongoError as e:
+            print(f"Error adding vote: {e}")
+            raise
+
+    def get_poll(self, poll_id):
+        """Retrieve a poll by ID."""
+        try:
+            poll = self.collection.find_one({"_id": ObjectId(poll_id)})
+            if not poll:
+                raise ValueError("Poll not found.")
+            return poll
+        except PyMongoError as e:
+            print(f"Error fetching poll: {e}")
+            raise
+
+    def get_user_polls(self, user_id):
+        """Retrieve all polls created by a specific user."""
+        try:
+            polls = list(self.collection.find({"createdBy": user_id}))
+            return polls
+        except PyMongoError as e:
+            print(f"Error fetching user's polls: {e}")
+            raise
+
+    def delete_poll(self, poll_id, user_id):
+        """Delete a poll if the user is the creator."""
+        try:
+            poll = self.collection.find_one({"_id": ObjectId(poll_id)})
+            if not poll:
+                raise ValueError("Poll not found.")
+
+            if str(poll["createdBy"]) != str(user_id):
+                raise PermissionError("You are not authorized to delete this poll.")
+
+            self.collection.delete_one({"_id": ObjectId(poll_id)})
+            return True
+        except PyMongoError as e:
+            print(f"Error deleting poll: {e}")
+            raise
+
+    def extend_poll_votes(self, poll_id, additional_votes, user_id):
+        """Increase the allowed votes for a poll."""
+        try:
+            poll = self.collection.find_one({"_id": ObjectId(poll_id)})
+            if not poll:
+                raise ValueError("Poll not found.")
+
+            if str(poll["createdBy"]) != str(user_id):
+                raise PermissionError("You are not authorized to update this poll.")
+
+            new_vote_limit = poll["requiredVotes"] + additional_votes
+
+            self.collection.update_one(
+                {"_id": ObjectId(poll_id)},
+                {"$set": {"requiredVotes": new_vote_limit}}
+            )
+            return True
+        except PyMongoError as e:
+            print(f"Error extending poll votes: {e}")
+            raise
+
+    def close_expired_polls(self):
+        """Automatically close polls that have expired."""
+        try:
+            now = datetime.now(timezone.utc)
+            result = self.collection.update_many(
+                {"expiresAt": {"$lt": now}, "isActive": True},
+                {"$set": {"isActive": False}}
+            )
+            return result.modified_count
+        except PyMongoError as e:
+            print(f"Error closing expired polls: {e}")
+            raise
+
+    def get_active_polls(self):
+        """Retrieve all active, non-expired, and public polls."""
+        try:
+            now = datetime.now(timezone.utc)
+            polls = list(self.collection.find({
+                "isActive": True,
+                "$expr": {"$gt": [{"$dateFromString": {"dateString": "$expiresAt"}}, now]},
+                "visibility": "public"
+            }))
+            # Convert ObjectId to string for JSON serialization
+            for poll in polls:
+                poll["_id"] = str(poll["_id"]) 
+            return polls
+        except PyMongoError as e:
+            print(f"Error fetching active polls: {e}")
+            raise
+
+    def get_polls_by_topic(self, topic):
+        """Retrieve all active polls under a specific topic."""
+        try:
+            now = datetime.now(timezone.utc)
+            polls = list(self.collection.find({
+                "topics": topic,
+                "isActive": True,
+                "$expr": {"$gt": [{"$dateFromString": {"dateString": "$expiresAt"}}, now]},
+                "visibility": "public"
+            }))
+            # Convert ObjectId to string for JSON serialization
+            for poll in polls:
+                poll["_id"] = str(poll["_id"]) 
+            return polls
+        except PyMongoError as e:
+            print(f"Error fetching polls by topic: {e}")
+            raise
+
+
+
+
+
+

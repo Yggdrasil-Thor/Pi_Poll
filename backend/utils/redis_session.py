@@ -37,7 +37,7 @@ def get_session(session_id):
     :param user_id: ID of the user.
     :return: The session data (dict) if it exists, else None.
     """
-    logging.info(f"Retrieving session for {session_id} from Redis")
+    #logging.info(f"Retrieving session for {session_id} from Redis")
     session_data = redis_client.get(f"app_session:{session_id}")
     if not session_data:
         logging.error(f"Session key app_session:{session_id} not found in Redis")

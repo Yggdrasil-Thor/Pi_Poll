@@ -116,7 +116,9 @@ import redis
 from datetime import timedelta
 from werkzeug.exceptions import HTTPException
 from routes.userRoutes import user_routes
-#from routes.pollRoutes import poll_routes
+from routes.pollRoutes import poll_routes
+from routes.paymentRoutes import payment_routes
+from routes.notificationRoutes import notification_routes
 
 # Initialize the Flask app
 app = Flask(__name__)
@@ -154,7 +156,9 @@ def handle_exception(e):
 
 # Register blueprints
 app.register_blueprint(user_routes, url_prefix="/users")
-#app.register_blueprint(poll_routes, url_prefix="/polls")
+app.register_blueprint(poll_routes, url_prefix="/poll")
+app.register_blueprint(payment_routes, url_prefix="/payment")
+app.register_blueprint(notification_routes, url_prefix="/notification")
 
 @app.route('/')
 def index():

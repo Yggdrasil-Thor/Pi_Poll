@@ -117,6 +117,12 @@ def handle_update_profile(request):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+def handle_get_user_polls(user_id):
+    try:
+        return user_model.get_user_polls(user_id)
+    except Exception as e:
+        logging.exception("Error in handle_get_user_polls")
+        return jsonify({"error": str(e)}), 500
 
 def handle_logout(request):
     try:

@@ -2,7 +2,7 @@ from utils.db import RedisClient
 from flask import request, jsonify
 from functools import wraps
 
-def apply_rate_limit(key, limit=5, window=60):
+def apply_rate_limit(key, limit=10, window=30):
     redis_client = RedisClient().get_client()
     current_count = redis_client.incr(key)
     if current_count == 1:

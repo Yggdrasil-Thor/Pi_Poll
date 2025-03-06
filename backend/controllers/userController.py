@@ -139,6 +139,20 @@ def handle_logout(request):
     except Exception as e:
         logging.exception("Error in handle_logout")
         return jsonify({"error": str(e)}), 500
+    
+
+def handle_get_comments_by_user(request,user_id):
+    #user_id, error = self.get_user_id_from_session()
+    #user_id = user_id
+    if 1==2:
+        return jsonify({"success": False, "message": 1}), 401
+        
+    try:
+        comments = user_model.get_comments_by_user(user_id)
+        return jsonify({"success": True, "data": comments}), 200
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to fetch comments: {str(e)}"}), 500
+
 
 '''def validate_pi_token(pi_token):
     """

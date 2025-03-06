@@ -7,6 +7,7 @@ from controllers.userController import (
     handle_update_profile,
     handle_logout,
     handle_get_user_polls,
+    handle_get_comments_by_user,
     validate_pi_token
 )
 
@@ -75,6 +76,16 @@ def get_user_polls(user_id):
         return handle_get_user_polls(user_id)  # Call the controller function
     except Exception as e:
         return create_response(False, message="Failed to fetch user's polls", status_code=500)
+    
+
+
+@user_routes.route('/comments/<user_id>', methods=['GET'])
+def get_comments_by_user_route(user_id):
+    """Route to fetch comments by a specific user."""
+    try:
+        return handle_get_comments_by_user(request,user_id)
+    except Exception as e:
+        return create_response(False, message=f"Failed to fetch comments by user: {e}", status_code=500)
 
 
 

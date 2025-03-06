@@ -1,8 +1,8 @@
 import pytest
-from db import db_instance  # Import the shared DB instance
-from user_model import User
-from poll_model import Poll
-from payment_model import Payment
+from utils.db import db_instance  # Import the shared DB instance
+from models.User import User
+from models.Poll import Poll
+from models.Payment import Payment
 from datetime import datetime, timedelta
 
 # Initialize models with the shared db_instance

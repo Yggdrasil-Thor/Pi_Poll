@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from utils.redis_session import get_session
 
-# Initialize Poll and Payment models
+# Initialize Poll, User and Payment models
 poll_model = Poll()
 payment_model = Payment()
 user_model = User()
@@ -142,35 +142,17 @@ class PollController:
         data = request.json
         user_id,error=self.get_user_id_from_session()
         option_id = data["optionId"]
-        #print("option_id", option_id)
         try:
             poll = self.poll_model.get_poll(poll_id)
-            #print(f"🔹 Retrieved Poll: {poll}")
             if not poll:
-                #print("in if 1")
                 return jsonify({"success": False, "message": "Poll not found."}), 404
             
             # Check if the poll is active before adding a vote
             if not poll.get("isActive", False):  
                 return jsonify({"success": False, "message": "Voting is closed for this poll."}), 400
 
-            
-            # Assuming poll['expiresAt'] is an ISO-formatted string
-            #expires_at = datetime.fromisoformat(poll['expiresAt'])
-            # Ensure expires_at is timezone-aware
-            #if expires_at.tzinfo is None:
-            #    expires_at = expires_at.replace(tzinfo=timezone.utc)
-            # Get the current UTC time
-            #current_time = datetime.now(timezone.utc)
-            # Compare the two datetime objects
-            #if current_time > expires_at:
-            #    print("The poll has expired.")
-            #    return jsonify({"success": False, "message": "Poll has expired and no longer accepts votes."}), 400
-            
             if self.user_model.has_user_voted(poll_id, user_id):
-                #print("in if 3")
                 return jsonify({"success": False, "message": "You have already voted on this poll."}), 400
-            #print("out of if")
             session = self.db_client.start_session()
             with session.start_transaction():
                 self.poll_model.add_vote(poll_id, option_id, user_id)
@@ -250,6 +232,8 @@ class PollController:
         requires_payment = data.get("requires_payment_for_update", False)
         payment_amount = data.get("payment_amount_for_update", 0)
 
+        if additional_votes < 0:
+            return jsonify({"success": False, "message": "You cannot decrease the allowed votes"}), 400
         try:
             poll = self.poll_model.get_poll(poll_id)
             print(f"🔹 Retrieved Poll: {poll}")

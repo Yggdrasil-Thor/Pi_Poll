@@ -119,6 +119,7 @@ from routes.userRoutes import user_routes
 from routes.pollRoutes import poll_routes
 from routes.paymentRoutes import payment_routes
 from routes.notificationRoutes import notification_routes
+from routes.commentRoutes import comment_routes
 
 # Initialize the Flask app
 app = Flask(__name__)
@@ -159,10 +160,11 @@ app.register_blueprint(user_routes, url_prefix="/users")
 app.register_blueprint(poll_routes, url_prefix="/poll")
 app.register_blueprint(payment_routes, url_prefix="/payment")
 app.register_blueprint(notification_routes, url_prefix="/notification")
+app.register_blueprint(comment_routes, url_prefix="/comments")
 
 @app.route('/')
 def index():
-    return jsonify({"message": "Welcome to the API. Use /users or /polls."})
+    return jsonify({"message": "Welcome to the API. This only has backend as of now"})
 
 
 if __name__ == '__main__':

@@ -17,14 +17,35 @@ def generate_objectid():
 
 def serialize_user(user):
     """Convert MongoDB user document to a JSON-serializable format."""
-    if user and "_id" in user:
+    if not user:
+        return None
+
+    # Convert the _id field
+    if "_id" in user:
         user["_id"] = str(user["_id"])
+
+    # Convert all fields that may contain ObjectIds
+    fields_to_convert = ["pollsCreated", "paymentsMade", "comments"]
+
+    for field in fields_to_convert:
+        if field in user and isinstance(user[field], list):
+            user[field] = [str(obj_id) for obj_id in user[field] if isinstance(obj_id, ObjectId)]
+
+    # Convert ObjectId in nested votesCast list
+    if "votesCast" in user and isinstance(user["votesCast"], list):
+        for vote in user["votesCast"]:
+            if "pollId" in vote:
+                vote["pollId"] = str(vote["pollId"])
+            if "optionId" in vote:
+                vote["optionId"] = str(vote["optionId"])
+
     return user
 
 
 class User:
     def __init__(self):
         self.collection = db_instance.get_collection("users")
+        self.db = db_instance  # Store db_instance to access other collections later if needed
 
     def create_user(self, pi_user_id, username, email=None):
         """Insert a new user into the database."""
@@ -37,7 +58,12 @@ class User:
                 "createdAt": datetime.utcnow(),
                 "pollsCreated": [],
                 "votesCast": [] ,
-                "paymentsMade":[]
+                "paymentsMade":[],
+                "comments": [],  # List of comment IDs (if storing separately)
+                "interestedTopics": [],  # Topics from polls they interacted with
+                "preferredSentiment": None,  # 'Positive', 'Neutral', or 'Negative' (Based on votes & comments)
+                "engagementScore": 0  # Tracks user activity (votes, comments, poll creation)
+
             }
             return self.collection.insert_one(user)
         except PyMongoError as e:
@@ -203,3 +229,49 @@ class User:
             print(f"Error adding payment to user: {e}")
             raise
 
+    def add_comment_to_user(self, user_id, comment_id,session=None):
+        """Add a comment ID to the user's comments list."""
+        try:
+            result = self.collection.update_one(
+                {"piUserId": user_id},
+                {"$push": {"comments": ObjectId(comment_id)}}
+            ,session=session)
+            if result.modified_count == 0:
+                raise ValueError("User not found or comment not added.")
+        except PyMongoError as e:
+            print(f"Error adding comment to user: {e}")
+            raise
+
+    def get_comments_by_user(self, user_id):
+        """Get the comments by the user using user_id"""
+        try:
+            # Fetch user document from the users collection
+            user = self.collection.find_one({"piUserId": str(user_id)})
+            
+            if not user:
+                return {"message": "User not found"}, 404
+            
+            # Get the list of comment IDs from the user document
+            comment_ids = user.get("comments", [])
+
+            if not comment_ids:
+                return {"message": "No comments found for this user"}, 200
+
+            # Fetch the comments collection separately
+            comments_collection = self.db.get_collection("comments")
+
+            # Fetch the comments from the comments collection
+            comments = list(comments_collection.find({"_id": {"$in": [ObjectId(cid) for cid in comment_ids]}}))
+
+            # Convert ObjectId fields to string for JSON serialization
+            for comment in comments:
+                comment["_id"] = str(comment["_id"])
+                comment["pollId"] = str(comment["pollId"])
+                if comment.get("parentId"):
+                    comment["parentId"] = str(comment["parentId"])
+            
+            return jsonify({"success": True, "comments": comments}), 200
+
+        except PyMongoError as e:
+            print(f"Error fetching comments for user {user_id}: {e}")
+            raise Exception(f"Database error: {e}")

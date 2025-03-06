@@ -15,6 +15,28 @@ def generate_objectid():
         print(f"Error generating ObjectId: {e}")
         raise
 
+def serialize_poll(poll):
+    """Convert MongoDB poll document into a JSON-serializable format."""
+    if not poll:
+        return None
+
+    # Convert _id field
+    if "_id" in poll:
+        poll["_id"] = str(poll["_id"])
+
+    # Convert ObjectId fields
+    fields_to_convert = ["comments"]
+
+    for field in fields_to_convert:
+        if field in poll:
+            if isinstance(poll[field], ObjectId):
+                poll[field] = str(poll[field])
+            elif isinstance(poll[field], list):  # Convert list of ObjectIds
+                poll[field] = [str(obj_id) for obj_id in poll[field] if isinstance(obj_id, ObjectId)]
+
+    return poll
+
+
 class Poll:
     def __init__(self):
         self.collection = db_instance.get_collection("polls")
@@ -47,6 +69,10 @@ class Poll:
                 "payment_amount_for_update": payment_amount_for_update,
                 "requires_payment_for_voting": requires_payment_for_voting,
                 "payment_amount_for_voting": payment_amount_for_voting,
+                "sentimentScore": None,  # Sentiment score (-1 to 1 or categorical)
+                "sentimentLabel": None,  # 'Positive', 'Neutral', or 'Negative'
+                "comments": []  # List of comment IDs (if storing separately)
+
             }
 
             result = self.collection.insert_one(poll,session=session)
@@ -125,7 +151,7 @@ class Poll:
             poll = self.collection.find_one({"_id": ObjectId(poll_id)})
             if not poll:
                 raise ValueError("Poll not found.")
-            return poll
+            return serialize_poll(poll)
         except PyMongoError as e:
             print(f"Error fetching poll: {e}")
             raise
@@ -134,6 +160,8 @@ class Poll:
         """Retrieve all polls created by a specific user."""
         try:
             polls = list(self.collection.find({"createdBy": user_id}))
+            for poll in polls:
+                poll = serialize_poll(poll)
             return polls
         except PyMongoError as e:
             print(f"Error fetching user's polls: {e}")
@@ -200,7 +228,8 @@ class Poll:
             }))
             # Convert ObjectId to string for JSON serialization
             for poll in polls:
-                poll["_id"] = str(poll["_id"]) 
+                poll["_id"] = str(poll["_id"])
+                poll = serialize_poll(poll)
             return polls
         except PyMongoError as e:
             print(f"Error fetching active polls: {e}")
@@ -218,13 +247,26 @@ class Poll:
             }))
             # Convert ObjectId to string for JSON serialization
             for poll in polls:
-                poll["_id"] = str(poll["_id"]) 
+                poll["_id"] = str(poll["_id"])
+                poll = serialize_poll(poll)
             return polls
         except PyMongoError as e:
             print(f"Error fetching polls by topic: {e}")
             raise
 
 
+    def add_comment_to_poll(self, poll_id, comment_id,session=None):
+        """Add a comment ID to the poll's comments list."""
+        try:
+            result = self.collection.update_one(
+                {"_id": ObjectId(poll_id)},
+                {"$push": {"comments": ObjectId(comment_id)}}
+            ,session=session)
+            if result.modified_count == 0:
+                raise ValueError("Poll not found or comment not added.")
+        except PyMongoError as e:
+            print(f"Error adding comment to poll: {e}")
+            raise
 
 
 

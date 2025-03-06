@@ -20,7 +20,7 @@ class Notification:
         self.collection = db_instance.get_collection("notifications")
 
     def create_notification(self, user_id, message, type="info", status="unread", link=None, 
-                            related_entity_id=None, category=None, is_actionable=False, expires_at=None, actor_user_id=None):
+                            related_entity_id=None, category=None, is_actionable=False, expires_at=None, actor_user_id=None,comment_id=None):
         """
         Create a new notification for a user.
         
@@ -48,7 +48,9 @@ class Notification:
                 "category": category,
                 "isActionable": is_actionable,
                 "expiresAt": expires_at,
-                "actorUserId": str(actor_user_id) if actor_user_id else None
+                "actorUserId": str(actor_user_id) if actor_user_id else None,
+                "relatedCommentId": str(comment_id) if comment_id else None,  # Link notification to comment
+
             }
             return self.collection.insert_one(notification)
         except PyMongoError as e:

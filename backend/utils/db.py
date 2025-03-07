@@ -1,6 +1,5 @@
-# db.py
 import os
-from pymongo import MongoClient
+from pymongo import MongoClient, ASCENDING
 from pymongo.errors import ConnectionFailure, PyMongoError
 from dotenv import load_dotenv
 
@@ -8,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Database:
-    _instance = None  # Class-level instance variable for Singleton pattern
+    _instance = None  # Singleton instance
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -43,7 +42,7 @@ class Database:
             try:
                 self.client = MongoClient(self.uri)
                 self.db = self.client[self.db_name]
-                self.client.admin.command('ping')  # Test connection
+                self.client.admin.command("ping")  # Test connection
                 print("Database connected successfully.")
             except ConnectionFailure as e:
                 print(f"Database connection failed: {e}")
@@ -62,10 +61,49 @@ class Database:
         try:
             if self.db is None:
                 raise Exception("Database connection is not established.")
-            return self.db[collection_name]
+            collection = self.db[collection_name]
+            self.ensure_indexes(collection_name, collection)  # Ensure indexes on collection
+            return collection
         except Exception as e:
             print(f"Error retrieving collection {collection_name}: {e}")
             raise
+
+    def ensure_indexes(self, collection_name, collection):
+        """
+        Define and create indexes based on collection names.
+        """
+        index_definitions = {
+            "users": [
+                (["piUserId"], {"unique": True}),
+                (["email"], {"unique": True}),
+                (["createdAt"], {}),
+            ],
+            "comments": [
+                (["pollId"], {}),
+                (["userId"], {}),
+                (["createdAt"], {}),
+            ],
+            "notifications": [
+                (["userId"], {}),
+                (["createdAt"], {}),
+                (["relatedEntityId"], {}),
+            ],
+            "payments": [
+                (["userId"], {}),
+                (["pollId"], {}),
+                (["createdAt"], {}),
+            ],
+            "polls": [
+                (["createdBy"], {}),
+                (["createdAt"], {}),
+                (["expiresAt"], {}),
+            ],
+        }
+        if collection_name in index_definitions:
+            for keys, options in index_definitions[collection_name]:
+                index_keys = [(key, ASCENDING) for key in keys]  # Convert to tuple format
+                collection.create_index(index_keys, **options)
+            print(f"Indexes ensured for {collection_name}")
 
     def close(self):
         try:
@@ -79,7 +117,6 @@ class Database:
 # Shared database instance
 db_instance = Database()
 db_instance.connect()  # Establish connection immediately when db.py is imported
-
 
 import redis
 from flask import current_app
@@ -103,3 +140,4 @@ class RedisClient:
 
     def get_client(self):
         return self.redis
+    

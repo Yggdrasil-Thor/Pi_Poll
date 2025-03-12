@@ -1,4 +1,4 @@
-from pymongo.errors import PyMongoError
+from pymongo.errors import PyMongoError,WriteConcernError
 from models.Poll import Poll
 from models.Payment import Payment
 from models.User import User
@@ -7,6 +7,8 @@ from flask import jsonify,request
 from datetime import datetime, timezone
 from bson import ObjectId
 from utils.redis_session import get_session
+from controllers.interactionController import InteractionController
+import time
 
 # Initialize Poll, User and Payment models
 poll_model = Poll()
@@ -138,44 +140,127 @@ class PollController:
                 session.abort_transaction()
             return jsonify({"success": False, "message": "Failed to update poll. Please try again."}), 500
 
+    #Gives Write concurrency error
+    """   def handle_add_vote(self, request, poll_id):
+            data = request.json
+            user_id,error=self.get_user_id_from_session()
+            option_id = data["optionId"]
+            try:
+                poll = self.poll_model.get_poll(poll_id)
+                if not poll:
+                    return jsonify({"success": False, "message": "Poll not found."}), 404
+                
+                # Check if the poll is active before adding a vote
+                if not poll.get("isActive", False):  
+                    return jsonify({"success": False, "message": "Voting is closed for this poll."}), 400
+
+                if self.user_model.has_user_voted(poll_id, user_id):
+                    return jsonify({"success": False, "message": "You have already voted on this poll."}), 400
+                session = self.db_client.start_session()
+                with session.start_transaction():
+                    self.poll_model.add_vote(poll_id, option_id, user_id,session)
+                    self.poll_model.update_poll_engagement(poll_id, "vote", session)
+                    self.user_model.add_vote_to_user( user_id, poll_id, option_id,session)
+                    # Log the interaction using InteractionController
+                    interaction_controller = InteractionController()  
+                    interaction_response = interaction_controller.handle_log_interaction(request, "vote")  
+                    if not interaction_response[0].json["success"]:  
+                        session.abort_transaction()  
+                        return jsonify({"success": False, "message": "Failed to log the interaction. Transaction aborted."}), 500  
+
+                    #print("Model add vote done")
+                    requires_payment, amount = self.payment_model.check_if_payment_required(poll_id, "voting")
+                    #print("chekc if payment required done")
+                    if requires_payment:
+                        self.payment_model.create_payment(
+                            user_id=user_id,
+                            poll_id=poll_id,
+                            amount=amount,
+                            payment_type="voting",
+                            transaction_id=data.get("paymentId"),
+                            status="completed"
+                        )
+                    session.commit_transaction()
+                    #print("transaction coomit done")
+                    return jsonify({"success": True, "message": "Vote added successfully"}), 200
+            except PyMongoError as e:
+                if session.in_transaction:  # ✅ Only abort if transaction is still active
+                    session.abort_transaction()
+                return jsonify({"success": False, "message": "Failed to add vote. Please try again."}), 500
+    """
+
     def handle_add_vote(self, request, poll_id):
         data = request.json
-        user_id,error=self.get_user_id_from_session()
+        user_id, error = self.get_user_id_from_session()
         option_id = data["optionId"]
+
         try:
             poll = self.poll_model.get_poll(poll_id)
             if not poll:
                 return jsonify({"success": False, "message": "Poll not found."}), 404
-            
-            # Check if the poll is active before adding a vote
+
             if not poll.get("isActive", False):  
                 return jsonify({"success": False, "message": "Voting is closed for this poll."}), 400
 
             if self.user_model.has_user_voted(poll_id, user_id):
                 return jsonify({"success": False, "message": "You have already voted on this poll."}), 400
-            session = self.db_client.start_session()
-            with session.start_transaction():
-                self.poll_model.add_vote(poll_id, option_id, user_id)
-                self.user_model.add_vote_to_user( user_id, poll_id, option_id)
-                #print("Model add vote done")
-                requires_payment, amount = self.payment_model.check_if_payment_required(poll_id, "voting")
-                #print("chekc if payment required done")
-                if requires_payment:
-                    self.payment_model.create_payment(
-                        user_id=user_id,
-                        poll_id=poll_id,
-                        amount=amount,
-                        payment_type="voting",
-                        transaction_id=data.get("paymentId"),
-                        status="completed"
-                    )
-                session.commit_transaction()
-                #print("transaction coomit done")
-                return jsonify({"success": True, "message": "Vote added successfully"}), 200
-        except PyMongoError as e:
-            if session.in_transaction:  # ✅ Only abort if transaction is still active
-                session.abort_transaction()
-            return jsonify({"success": False, "message": "Failed to add vote. Please try again."}), 500
+
+            MAX_RETRIES = 3  # Retry count for both voting & engagement update
+            for attempt in range(MAX_RETRIES):
+                try:
+                    with self.db_client.start_session() as session:
+                        with session.start_transaction():
+                            self.poll_model.add_vote(poll_id, option_id, user_id, session)
+                            self.user_model.add_vote_to_user(user_id, poll_id, option_id, session)
+
+                            # Log interaction
+                            interaction_controller = InteractionController()  
+                            interaction_response = interaction_controller.handle_log_interaction(request, "vote")  
+                            if not interaction_response[0].json["success"]:  
+                                session.abort_transaction()  
+                                return jsonify({"success": False, "message": "Failed to log the interaction. Transaction aborted."}), 500  
+
+                        session.commit_transaction()
+                        print(f"✅ Vote added successfully (Attempt {attempt + 1})")
+
+                    # ✅ Engagement Update (Retries if needed)
+                    for engagement_attempt in range(MAX_RETRIES):
+                        try:
+                            self.poll_model.update_poll_engagement(poll_id, "vote")
+                            break  # Success, exit loop
+                        except WriteConcernError:
+                            print(f"⚠️ Engagement Write Conflict (Attempt {engagement_attempt + 1}) - Retrying...")
+                            time.sleep(0.1)  # Small delay before retry
+                    else:
+                        print("❌ Max retries reached for engagement update. Poll engagement may be inconsistent.")
+
+                    # ✅ Payment Handling
+                    requires_payment, amount = self.payment_model.check_if_payment_required(poll_id, "voting")
+                    if requires_payment:
+                        self.payment_model.create_payment(
+                            user_id=user_id,
+                            poll_id=poll_id,
+                            amount=amount,
+                            payment_type="voting",
+                            transaction_id=data.get("paymentId"),
+                            status="completed"
+                        )
+
+                    return jsonify({"success": True, "message": "Vote added successfully"}), 200
+
+                except WriteConcernError:
+                    print(f"⚠️ Write Conflict (Attempt {attempt + 1}) - Retrying...")
+                    time.sleep(0.1)  # Small delay before retry
+
+                except PyMongoError as e:
+                    print(f"❌ Database Error: {e}")
+                    return jsonify({"success": False, "message": "Failed to add vote. Please try again."}), 500
+
+        except Exception as e:
+            print(f"❌ Unexpected Error: {e}")
+            return jsonify({"success": False, "message": "An error occurred. Please try again later."}), 500
+
+        return jsonify({"success": False, "message": "Failed after multiple attempts. Try again later."}), 500
 
     def handle_get_poll(self, request, poll_id):
         try:
@@ -236,7 +321,7 @@ class PollController:
             return jsonify({"success": False, "message": "You cannot decrease the allowed votes"}), 400
         try:
             poll = self.poll_model.get_poll(poll_id)
-            print(f"🔹 Retrieved Poll: {poll}")
+            #print(f"🔹 Retrieved Poll: {poll}")
 
             if not poll:
                 return jsonify({"success": False, "message": "Poll not found."}), 404
@@ -271,12 +356,12 @@ class PollController:
                     )
 
                 session.commit_transaction()
-                print("🔹 Transaction committed successfully")
+                #print("🔹 Transaction committed successfully")
 
             return jsonify({"success": True, "message": "Poll vote limit updated successfully."}), 200
 
         except PyMongoError as e:
             if session.in_transaction:
                 session.abort_transaction()
-            print(f"🔴 PyMongoError in handle_extend_poll_votes: {e}")
+            #print(f"🔴 PyMongoError in handle_extend_poll_votes: {e}")
             return jsonify({"success": False, "message": "Failed to extend poll votes. Please try again."}), 500

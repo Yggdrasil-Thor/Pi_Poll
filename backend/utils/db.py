@@ -74,9 +74,7 @@ class Database:
         """
         index_definitions = {
             "users": [
-                (["piUserId"], {"unique": True}),
-                (["email"], {"unique": True}),
-                (["createdAt"], {}),
+                (["piUserId"], {"unique": True})
             ],
             "comments": [
                 (["pollId"], {}),
@@ -98,6 +96,10 @@ class Database:
                 (["createdAt"], {}),
                 (["expiresAt"], {}),
             ],
+            "interactions": [
+                (["pollId"], {}),
+                (["userId"], {}),
+            ]
         }
         if collection_name in index_definitions:
             for keys, options in index_definitions[collection_name]:

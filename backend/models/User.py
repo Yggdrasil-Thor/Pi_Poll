@@ -25,7 +25,7 @@ def serialize_user(user):
         user["_id"] = str(user["_id"])
 
     # Convert all fields that may contain ObjectIds
-    fields_to_convert = ["pollsCreated", "paymentsMade", "comments"]
+    fields_to_convert = ["pollsCreated", "paymentsMade", "comments","interactionHistory","likedPolls","dislikedPolls"]
 
     for field in fields_to_convert:
         if field in user and isinstance(user[field], list):
@@ -60,10 +60,12 @@ class User:
                 "votesCast": [] ,
                 "paymentsMade":[],
                 "comments": [],  # List of comment IDs (if storing separately)
-                "interestedTopics": [],  # Topics from polls they interacted with
-                "preferredSentiment": None,  # 'Positive', 'Neutral', or 'Negative' (Based on votes & comments)
-                "engagementScore": 0  # Tracks user activity (votes, comments, poll creation)
-
+                "interestedTopics": [],  # Topics from interacted polls (CBF)
+                "interactionHistory": [],  # Stores past interactions (CF)
+                "engagementScore": 0,  # Determines CF/CBF weight
+                "recommendationVector": None,  # Store CF/CBF user profile data
+                "likedPolls": [],  # List of polls liked by the user
+                "dislikedPolls": []  # List of polls disliked by the user
             }
             return self.collection.insert_one(user)
         except PyMongoError as e:
@@ -96,7 +98,7 @@ class User:
             print(f"Error updating user auth token: {e}")
             raise
 
-    def add_vote_to_user(self, pi_user_id, poll_id, option_id):
+    def add_vote_to_user(self, pi_user_id, poll_id, option_id,session=None):
         """Record the user's vote by updating their votesCast field."""
         try:
             vote_entry = {"pollId": poll_id, "optionId": option_id, "votedAt": datetime.now(timezone.utc)}
@@ -104,7 +106,7 @@ class User:
             result = self.collection.update_one(
                 {"piUserId": pi_user_id},
                 {"$push": {"votesCast": vote_entry}}
-            )
+            ,session=session)
 
             if result.modified_count == 0:
                 print("User not found or vote not recorded.")
@@ -123,7 +125,7 @@ class User:
                 print(f"User {user_id} not found.")
                 return False
 
-            print("inside user voted")
+            #print("inside user voted")
             return any(vote.get("pollId") == poll_id for vote in user.get("votesCast", []))
 
         except PyMongoError as e:
@@ -275,3 +277,121 @@ class User:
         except PyMongoError as e:
             print(f"Error fetching comments for user {user_id}: {e}")
             raise Exception(f"Database error: {e}")
+        
+    def update_user_engagement(self, user_id, poll_id, action_type, session=None):
+        """Log user interaction and update engagement score atomically."""
+        print("Inside update_user_engagement")
+
+        try:
+            # Fetch current user engagement status
+            user = self.collection.find_one({"piUserId": user_id})
+            if not user:
+                raise ValueError(f"User with ID {user_id} not found.")
+
+            liked_polls = set(user.get("likedPolls", []))
+            disliked_polls = set(user.get("dislikedPolls", []))
+            poll_obj_id = ObjectId(poll_id)
+
+            # Define engagement score changes
+            score_map = {
+                "view": 0.5, "click": 1, "vote": 2, "comment": 3
+            }
+
+            score_change = score_map.get(action_type, 0)  # Default to 0 if not found
+
+            # Handle like/dislike transitions
+            if action_type == "like":
+                if poll_obj_id in disliked_polls:  # If previously disliked, reset first
+                    score_change += 1  # Remove previous dislike effect
+                elif poll_obj_id not in liked_polls:
+                    score_change += 2  # New like
+
+            elif action_type == "dislike":
+                if poll_obj_id in liked_polls:  # If previously liked, reset first
+                    score_change -= 2  # Remove previous like effect
+                elif poll_obj_id not in disliked_polls:
+                    score_change += 1  # New dislike
+
+            elif action_type == "neutral":
+                if poll_obj_id in liked_polls:
+                    score_change -= 2  # Remove like effect
+                elif poll_obj_id in disliked_polls:
+                    score_change -= 1  # Remove dislike effect
+
+            # Log user interaction history
+            interaction_entry = {
+                "pollId": poll_obj_id,
+                "actionType": action_type,
+                "timestamp": datetime.now(timezone.utc)
+            }
+
+            self.collection.update_one(
+                {"piUserId": user_id},
+                {"$push": {"interactionHistory": interaction_entry}, "$inc": {"engagementScore": score_change}},
+                session=session
+            )
+
+        except PyMongoError as e:
+            print(f"Error updating user engagement: {e}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            raise
+
+
+    def update_poll_preference(self, user_id, poll_id, action, session=None):
+        """Update the user's poll preference while maintaining mutual exclusivity."""
+        try:
+            user = self.collection.find_one({"piUserId": user_id})
+            if not user:
+                raise ValueError(f"User with ID {user_id} not found.")
+
+            liked_polls = set(user.get("likedPolls", []))
+            disliked_polls = set(user.get("dislikedPolls", []))
+            poll_obj_id = ObjectId(poll_id)
+
+            update_operations = {}
+
+            if action == "like":
+                if poll_obj_id in disliked_polls:
+                    update_operations["$pull"] = {"dislikedPolls": poll_obj_id}  # Move to neutral first
+                elif poll_obj_id not in liked_polls:
+                    update_operations["$addToSet"] = {"likedPolls": poll_obj_id}  # Finally Like
+
+            elif action == "dislike":
+                if poll_obj_id in liked_polls:
+                    update_operations["$pull"] = {"likedPolls": poll_obj_id}  # Move to neutral first
+                elif poll_obj_id not in disliked_polls:
+                    update_operations["$addToSet"] = {"dislikedPolls": poll_obj_id}  # Finally Dislike
+
+            elif action == "neutral":
+                update_operations["$pull"] = {"likedPolls": poll_obj_id, "dislikedPolls": poll_obj_id}  # Neutral state
+
+            if update_operations:
+                result = self.collection.update_one(
+                    {"piUserId": user_id},
+                    update_operations,
+                    session=session
+                )
+                if result.modified_count == 0:
+                    raise ValueError(f"Poll preference update failed: {action} (no changes made)")
+
+            return {"message": f"Poll set to {action} successfully."}
+
+        except PyMongoError as e:
+            print(f"Error updating poll preference: {e}")
+            raise
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            raise
+
+    def update_user_recommendations(self, user_id, recommendations):
+        """Update the user's recommendation vector in the database."""
+        try:
+            return self.collection.update_one(
+                {"piUserId": user_id},
+                {"$set": {"recommendationVector": recommendations}}
+            )
+        except PyMongoError as e:
+            print(f"❌ Error updating user recommendations: {e}")
+            raise

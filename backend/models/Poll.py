@@ -4,6 +4,7 @@ from datetime import datetime
 from pymongo.errors import PyMongoError
 from datetime import datetime, timezone
 
+
 # Importing db_instance class from db.py
 from utils.db import db_instance
 
@@ -71,8 +72,16 @@ class Poll:
                 "payment_amount_for_voting": payment_amount_for_voting,
                 "sentimentScore": None,  # Sentiment score (-1 to 1 or categorical)
                 "sentimentLabel": None,  # 'Positive', 'Neutral', or 'Negative'
-                "comments": []  # List of comment IDs (if storing separately)
-
+                "comments": [],  # List of comment IDs (if storing separately)
+                "engagementMetrics": {  # Tracks poll popularity and interactions
+                    "views": 0,
+                    "clicks": 0,
+                    "votes": 0,
+                    "comments": 0,
+                    "likes":0,
+                    "dislikes":0
+                },
+                "featureVector": None  # Store embeddings for CBF (TF-IDF, BERT, etc.)
             }
 
             result = self.collection.insert_one(poll,session=session)
@@ -108,7 +117,7 @@ class Poll:
             print(f"Error updating poll details: {e}")
             raise
 
-    def add_vote(self, poll_id, option_id, user_id):
+    def add_vote(self, poll_id, option_id, user_id,session=None):
         """Add a vote to a poll, checking if payment is required."""
         try:
             poll = self.collection.find_one({"_id": ObjectId(poll_id)})
@@ -132,7 +141,7 @@ class Poll:
             result = self.collection.update_one(
                 {"_id": ObjectId(poll_id), "options.optionId": option_id},
                 {"$inc": {"options.$.voteCount": 1, "totalVotes": 1, "currentVotes": 1}}
-            )
+            ,session=session)
             if result.modified_count == 0:
                 raise ValueError("Poll or Option not found.")
 
@@ -140,7 +149,7 @@ class Poll:
                 self.collection.update_one(
                     {"_id": ObjectId(poll_id)},
                     {"$set": {"isActive": False}}
-                )
+                ,session=session)
         except PyMongoError as e:
             print(f"Error adding vote: {e}")
             raise
@@ -268,6 +277,62 @@ class Poll:
             print(f"Error adding comment to poll: {e}")
             raise
 
+
+    def update_poll_engagement(self, poll_id, action_type, session=None):
+        """Update poll engagement ensuring mutual exclusivity between likes, dislikes, and neutral resets."""
+        try:
+            engagement_fields = {
+                "view": "engagementMetrics.views",
+                "click": "engagementMetrics.clicks",
+                "vote": "engagementMetrics.votes",
+                "comment": "engagementMetrics.comments"
+            }
+
+            update_operations = {}
+
+            if action_type in engagement_fields:
+                update_operations["$inc"] = {engagement_fields[action_type]: 1}
+
+            elif action_type == "like":
+                update_operations["$inc"] = {"engagementMetrics.likes": 1}
+                update_operations["$set"] = {"engagementMetrics.dislikes": 0}  # Reset dislikes if liked
+            elif action_type == "dislike":
+                update_operations["$inc"] = {"engagementMetrics.dislikes": 1}
+                update_operations["$set"] = {"engagementMetrics.likes": 0}  # Reset likes if disliked
+            elif action_type == "neutral":
+                update_operations["$set"] = {"engagementMetrics.likes": 0, "engagementMetrics.dislikes": 0}  # Reset both
+
+            result = self.collection.update_one(
+                {"_id": ObjectId(poll_id)},
+                update_operations,
+                session=session
+            )
+
+            if result.modified_count == 0:
+                raise ValueError("Poll not found or engagement not updated.")
+
+        except PyMongoError as e:
+            print(f"Error updating poll engagement: {e}")
+            raise
+
+    def get_polls_sorted_by(self, field, descending=True, limit=3):
+        """Fetches polls sorted by a specific field (e.g., engagement metrics)."""
+        try:
+            sort_order = -1 if descending else 1
+            polls = list(self.collection.find().sort(field, sort_order).limit(limit))
+            return [serialize_poll(poll) for poll in polls]
+        except PyMongoError as e:
+            print(f"Error fetching sorted polls: {e}")
+            raise
+
+    def get_polls_filtered(self, filter_condition, limit=3):
+        """Fetches polls based on a filter condition (e.g., recent polls)."""
+        try:
+            polls = list(self.collection.find(filter_condition).sort("createdAt", -1).limit(limit))
+            return [serialize_poll(poll) for poll in polls]
+        except PyMongoError as e:
+            print(f"Error fetching filtered polls: {e}")
+            raise
 
 
 

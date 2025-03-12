@@ -83,3 +83,18 @@ def redis_health_check():
     except redis.ConnectionError as e:
         print(f"Redis connection failed: {e}")
         return False
+
+# Helper functions for recommendation caching
+
+def cache_recommendations(user_id, recommendations, expiry=3600):
+    """Stores user recommendations in Redis with an expiry time."""
+    redis_client.setex(f"recs:{user_id}", expiry, json.dumps(recommendations))
+
+def get_cached_recommendations(user_id):
+    """Fetches cached recommendations for a user from Redis."""
+    cached_recs = redis_client.get(f"recs:{user_id}")
+    return json.loads(cached_recs) if cached_recs else None
+
+def delete_cached_recommendations(user_id):
+    """Deletes cached recommendations for a user (useful when updating)."""
+    redis_client.delete(f"recs:{user_id}")

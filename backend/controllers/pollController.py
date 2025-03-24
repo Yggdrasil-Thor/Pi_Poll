@@ -223,6 +223,10 @@ class PollController:
                         session.commit_transaction()
                         print(f"✅ Vote added successfully (Attempt {attempt + 1})")
 
+                        # ✅ Emit WebSocket event for live updates
+                        self.emit_vote_update(poll_id, option_id)
+
+
                     # ✅ Engagement Update (Retries if needed)
                     for engagement_attempt in range(MAX_RETRIES):
                         try:
@@ -261,6 +265,11 @@ class PollController:
             return jsonify({"success": False, "message": "An error occurred. Please try again later."}), 500
 
         return jsonify({"success": False, "message": "Failed after multiple attempts. Try again later."}), 500
+    
+    def emit_vote_update(self, poll_id, option_id):
+        from app import socketio
+        socketio.emit("vote_update", {"poll_id": poll_id, "vote": option_id}, namespace="/votes")
+
 
     def handle_get_poll(self, request, poll_id):
         try:

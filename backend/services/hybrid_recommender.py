@@ -1,5 +1,5 @@
-from backend.services.CollaborativeFiltering import CollaborativeFiltering
-from backend.services.ContentBasedFiltering import ContentBasedFiltering
+from services.CollaborativeFiltering import CollaborativeFiltering
+from services.ContentBasedFiltering import ContentBasedFiltering
 from services.fallback_strategy import FallbackStrategy
 from utils.db import db_instance
 from models.User import User

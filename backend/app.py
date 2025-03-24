@@ -6,6 +6,7 @@ import sys
 import redis
 from datetime import timedelta
 from werkzeug.exceptions import HTTPException
+from flask_socketio import SocketIO
 from routes.userRoutes import user_routes
 from routes.pollRoutes import poll_routes
 from routes.paymentRoutes import payment_routes
@@ -16,6 +17,9 @@ from routes.recommendationRoutes import recommendation_routes
 
 # Initialize the Flask app
 app = Flask(__name__)
+
+# Initialize Flask-SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Enable CORS for all routes (can be restricted to specific domains)
 CORS(app)
@@ -78,7 +82,7 @@ app.register_blueprint(recommendation_routes, url_prefix="/recommendations")
 def index():
     return jsonify({"message": "Welcome to the API. This only has backend as of now"})
 
-if __name__ == '__main__':
+'''if __name__ == '__main__':
     logger.info("✅ Starting the server...")
     from waitress import serve
-    serve(app, host="0.0.0.0", port=5000)
+    serve(app, host="0.0.0.0", port=5000)'''

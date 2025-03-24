@@ -1,95 +1,62 @@
-mongodb+srv://YggDrasil:<db_password>@cluster0.idfko.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0
+# Scalable Polling System with Real-Time Analytics
 
-mongodb+srv://YggDrasil:YggDrasil@cluster0.idfko.mongodb.net/Pi_Poll?retryWrites=true&w=majority&appName=Cluster0
+A real-time polling platform built with Flask, WebSockets, Kafka, and MongoDB, supporting interactive polls with live updates, sentiment analysis, and engagement metrics. This project only contains the backend code as of now. Any pull requests for adding Frontend contributions are welcomed.
 
+## Features
+- **Real-time Polling:** Uses Flask and WebSockets to enable instant updates for polls.
+- **Kafka Integration:** Implements Kafka producers and consumers for event-driven architecture.
+- **Sentiment Analysis:** NLP-based analysis of poll comments to derive insights.
+- **Secure API:** Features rate limiting, session management, and authentication.
+- **Live Vote Tracker:** Tkinter-based GUI to display live vote counts using Socket.IO.
+- **Optimized Performance:** Efficient database indexing and concurrency control for scalability.
 
-project-root/
-├── backend/                           // Backend logic for the application
-│   ├── controllers/                   // Route handlers and business logic
-│   │   ├── authController.py          // Handles Pi SDK auth logic
-│   │   ├── pollController.py          // Handles poll creation, voting, results
-│   │   └── notificationController.py  // Handles user notifications
-│   ├── models/                        // Mongoose schemas for MongoDB
-│   │   ├── User.py                    // User schema (includes Pi SDK user ID)
-│   │   ├── Poll.py                    // Poll schema
-│   │   └── Notification.py            // Notification schema
-│   ├── routes/                        // API routes
-│   │   ├── authRoutes.py              // Auth-related routes
-│   │   ├── pollRoutes.py              // Poll-related routes
-│   │   └── notificationRoutes.py      // Notification-related routes
-│   ├── middleware/                    // Express middleware
-│   │   └── authMiddleware.py          // Middleware for route protection
-│   ├── utils/                         // Utility functions for backend
-│   │   └── db.py                      // MongoDB connection logic
-│   ├── config/                        // Configuration files
-│   │   ├── dbConfig.py                // MongoDB connection strings
-│   │   └── env.py                     // Environment variable management
-│   ├── app.py                         // Express app initialization
-│   └── server.py                      // Backend server entry point
-├── frontend/                          // React app (detailed below)
-│   ├── src/
-│   │   ├── components/                // Reusable components and pages
-│   │   │   ├── DashboardPage.js       // Dashboard with My Polls and Other Polls
-│   │   │   ├── PollDetailPage.js      // Single poll details, voting, and results
-│   │   │   ├── CreatePollPage.js      // Create new polls
-│   │   │   ├── PollResultPage.js      // Poll results visualization
-│   │   │   ├── UserProfilePage.js     // User profile details and settings
-│   │   │   ├── NotificationsPage.js   // Notifications for the user
-│   │   │   ├── SearchPollsPage.js     // Poll search and filter
-│   │   │   ├── AdminPanelPage.js      // Admin management tasks
-│   │   │   ├── PollReportingPage.js   // Reporting inappropriate polls
-│   │   │   ├── PollCommentsPage.js    // Poll comments and discussions
-│   │   │   ├── LoginPage.js           // Login and Pi SDK integration
-│   │   │   └── ProtectedRouteComponent.js  // Route protection for authenticated users
-│   │   ├── utils/                     // Utility functions
-│   │   │   ├── auth.js                // Handles Pi SDK authentication logic
-│   │   │   └── notifications.js       // Notification system logic
-│   │   ├── styles/                    // App styling
-│   │   │   └── App.css                // Global styles for the app
-│   │   ├── App.js                     // Main app entry point and routing
-│   │   ├── index.js                   // App initialization and rendering
-│   │   ├── assets/                    // Static assets like images, icons
-│   │   │   └── logo.png
-│   │   ├── services/                  // API or database interaction logic
-│   │   │   ├── api.js                 // API calls related to polls
-│   │   │   └── db.js                  // MongoDB connection and queries
-│   │   ├── hooks/                     // Custom React hooks
-│   │   │   └── usePolls.js            // Custom hook for polls management
-│   │   ├── config/                    // Configuration files
-│   │   │   └── dbConfig.js            // MongoDB connection settings
-│   │   └── middleware/                // Express middleware (if any)
-│   └── package.json                   // Project dependencies and scripts
-├── .env                               // Environment variables (MongoDB URI, Pi SDK key)
-├── package.json                       // Backend dependencies and scripts
-└── README.md                          // Documentation for the project
+## Installation
 
+### Prerequisites
+- Python 3.8+
+- MongoDB
+- Redis
+- Kafka
 
+### Setup
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/Yggdrasil-Thor/Pi_Poll.git
+   cd Pi_Poll/backend
+   ```
 
+2. Create a virtual environment and activate it:
+   ```sh
+   python -m venv pi_poll_app_venv
+   source pi_poll_app_venv/bin/activate  # On macOS/Linux
+   pi_poll_app_venv\Scripts\activate  # On Windows
+   ```
 
-DashboardPage.js - This page will display a summary of the user’s activities, like their own polls, votes, and the ability to navigate to other sections, including searching for polls and creating new polls.
-PollDetailPage.js - A page to view detailed information about a specific poll, including responses, voting options, and results.
-CreatePollPage.js - This page will handle the creation of new polls by users.
-PollResultPage.js - Displays the results of a poll after it’s been voted on, showing responses and the percentage or count of votes.
-UserProfilePage.js - Allows users to view and edit their profile information.
-NotificationsPage.js - Displays notifications related to polls, votes, or other important actions in the system.
-SearchPollsPage.js - This page will allow users to search for polls (both their own and others).
-AdminPanelPage.js - Allows administrators to manage polls, users, and other administrative tasks.
-PollReportingPage.js - Page for generating reports on polls, such as activity, responses, or voting trends.
-PollCommentsPage.js - For users to comment on polls, and interact with other users.
-LoginPage.js - A page where users can log in or sign up.
-ProtectedRouteComponent.js - A component to protect certain routes and ensure that users are authenticated before accessing them.
+3. Install dependencies:
+   ```sh
+   pip install -r requirements.txt #inside backend
+   ```
 
+4. Set up environment variables:
+   ```sh
+   cp .env.example .env  # Then update it with your credentials
+   ```
 
+5. Start Redis and Kafka services.
 
+6. Run the Flask app:
+   ```sh
+   python app.py
+   ```
 
+## Usage
+- Start the backend server.
+- Connect the client via WebSockets to receive live updates.
+- Use the Tkinter-based tracker to visualize live poll results.
 
-1. Pi SDK Authentication
-We’ll integrate Pi SDK for authentication, which you've mentioned earlier. I'll follow the documentation closely to ensure everything works seamlessly for login and user management.
-2. React Errors and Debugging
-Invalid Hook Call Warning: This usually happens if hooks (like useState, useEffect, etc.) are used incorrectly, or there’s a mismatch between React versions (React and React DOM). We will ensure that hooks are only used inside function components and that React versions are aligned.
-Multiple Copies of React: This can happen when dependencies bring in different versions of React. We will ensure the app uses a single version of React and resolve any dependency conflicts if found.
-useRef Error: This error often appears when useRef is used inappropriately or outside of a functional component. We will ensure that hooks like useRef are used properly.
-Pi SDK Timeout Error: This suggests that there’s an issue with the messaging service for Pi SDK. We will need to look into the SDK's promise timing, perhaps by handling errors and retrying connections or adjusting the timeout settings.
-3. Implementation Timeline
-I'll wait for your confirmation before starting to write the code, ensuring that we resolve any specific configuration, structure, or React versioning issues first.
-Once you're ready, we can proceed step-by-step to resolve errors, implement Pi SDK auth, and ensure everything works smoothly.
+## Contributing
+Feel free to fork the repo and submit pull requests.
+
+## License
+This project is licensed under the [Apache License 2.0](LICENSE).
+

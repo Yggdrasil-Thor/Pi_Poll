@@ -1,7 +1,7 @@
 # .gitignore
 
 # Virtual environment
-pi_poll_app_venv/
+.venv
 
 # Node modules
 frontend/node_modules/

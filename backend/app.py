@@ -19,7 +19,10 @@ from routes.recommendationRoutes import recommendation_routes
 app = Flask(__name__)
 
 # Initialize Flask-SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+#socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading", 
+                    logger=True, engineio_logger=True, 
+                    upgrade=True, allow_upgrades=True)
 
 # Enable CORS for all routes (can be restricted to specific domains)
 CORS(app)

@@ -268,7 +268,15 @@ class PollController:
     
     def emit_vote_update(self, poll_id, option_id):
         from app import socketio
-        socketio.emit("vote_update", {"poll_id": poll_id, "vote": option_id}, namespace="/votes")
+        print(f"📢 Emitting vote_update: poll_id={poll_id}, vote={option_id}")
+        
+        try:
+            socketio.emit("vote_update", {"poll_id": poll_id, "vote": option_id})
+            socketio.sleep(0)  # 🔥 Forces instant emission
+            print("✅ Emission successful!")
+        except Exception as e:
+            print(f"❌ Emission failed: {e}")
+
 
 
     def handle_get_poll(self, request, poll_id):
